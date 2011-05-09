@@ -1,0 +1,203 @@
+<html>
+<!DOCTYPE html>
+	<head>
+		<style>
+			canvas {
+				display:block;
+				margin: 20px auto;
+				border: 1px solid black;
+				height: 400px;
+				width: 600px;
+			}
+		</style>
+		<script type="text/javascript">
+			var width = 600;
+			var height = 400;
+			var canvas = ctx = false;
+			var frameRate = 1/40; // seconds
+			var frameDelay = frameRate * 1000;
+			var loopTimer = false;
+			
+			var ball = {
+				position: {x: width/2, y: 0},
+				velocity: {x: 10, y: 0},
+				mass: 0.1, // kg
+				radius: 15, // 1 px = 1 cm
+				restitution:  -0.8,
+				
+			};
+			
+			var wall = {
+				position: {x: width*.8, y: 0},
+				thickness: 10,
+				wallHeight: height,
+				gapWidth: 100,
+				gapPosition: 120,
+				
+				isThroughGap: function (x, y, radius) {
+					var xBorderLeft = this.position.x;
+					var xBorderRight = this.position.x + this.thickness;
+					var yBorderTop = this.position.y + this.gapPosition;
+					var yBorderBottom = this.position.y + this.gapPosition + this.gapWidth;
+					//console.log("xBorderLeft: " + xBorderLeft + "; xBorderRight: " + xBorderRight + 
+						//		"yBorderTop: " + yBorderTop + "; yBorderBottom: " + yBorderBottom);
+					
+					if ((x + radius) >= xBorderLeft && // (x + radius) <=xBorderRight &&
+						(y - radius) >= yBorderTop && (y + radius) <= yBorderBottom)
+						return true;
+					else return false;
+				}
+			};
+			
+			var Cd = 0.47; // dimensionless
+			var rho = 1.22; // kg/m^3
+			var A = Math.PI * ball.radius * ball.radius / (10000);
+			
+			var mouse = {x: 0 , y: 0, isDown: false};
+			
+				//ball.velocity.x = 1;
+				//ball.velocity.y = 1;
+			// setInterval runs a function every X seconds
+			// clearInterval stops the process
+			function getMousePosition(e) {
+				mouse.x = e.pageX - canvas.offsetLeft;
+				mouse.y = e.pageY - canvas.offsetTop;
+			}
+			
+			var mouseDown = function(e) {
+				if(e.which == 1) {
+					getMousePosition(e);
+					mouse.isDown = true;
+					ball.position.x = mouse.x;
+					ball.position.y = mouse.y;
+				}
+			}
+			
+			var mouseUp = function(e) {
+				
+				if (e.which == 1) { 
+					mouse.isDown = false;
+					ball.velocity.x = (ball.position.x - mouse.x) / 10 ;
+					ball.velocity.y = (ball.position.y - mouse.y) / 10 ;
+				}
+			}
+			var setup = function () {
+				canvas = document.getElementById("canvas");
+					// get "rendering context"
+				ctx = canvas.getContext("2d"); // there is also a 3-D context; not supported universally, so don't use it!
+				// you can only draw rectangles ...  
+				
+				canvas.onmousemove = getMousePosition;
+				canvas.onmousedown = mouseDown;
+				canvas.onmouseup = mouseUp;
+				
+				ctx.fillStyle = "red";
+				ctx.strokeStyle = "#000000";
+				loopTimer = setInterval(loop, frameDelay);
+				
+			}
+			
+			function updateBall() {
+			
+				// do physics
+				// drag force: Fd = -1/2 * Cd * A * rho * v.v
+			
+				var Fx = -0.5 * Cd * A * rho * ball.velocity.x * ball.velocity.x * ball.velocity.x / Math.abs(ball.velocity.x);
+				var Fy = -0.5 * Cd * A * rho * ball.velocity.y * ball.velocity.y * ball.velocity.y / Math.abs(ball.velocity.y);
+				
+				Fx = (isNaN(Fx) ? 0 : Fx);
+				Fy = (isNaN(Fy) ? 0 : Fy);
+					// calculate acceleration ( F = ma )
+				var ax = Fx/ball.mass;
+				var ay = 9.81 + (Fy / ball.mass);
+				
+					// Integrate to get velocity
+				ball.velocity.x += ax * frameRate;
+				ball.velocity.y += ay * frameRate;
+				
+					// Integrate to get position
+				ball.position.x += ball.velocity.x * frameRate * 100 ;
+				ball.position.y += ball.velocity.y * frameRate * 100 ;
+			
+			}
+			
+			function detectCollisions() {
+				
+				var xBorderRight = wall.position.x;
+				var xBorderLeft = 0;
+				var yBorderTop = 0;
+				var yBorderBottom = height;
+				
+				
+				if (wall.isThroughGap(ball.position.x, ball.position.y, ball.radius)) 
+				{
+					console.log ("WIN!");
+					xBorderRight = width;		
+				}
+				 
+				if (ball.position.y > yBorderBottom - ball.radius) {
+					ball.velocity.y *= ball.restitution;
+					ball.position.y = yBorderBottom - ball.radius;
+				} 
+				if (ball.position.y < ball.radius - yBorderTop) {
+					ball.velocity.y *= ball.restitution;
+					ball.position.y = ball.radius;
+				}
+				
+				if (ball.position.x > xBorderRight - ball.radius) {
+					ball.velocity.x *= ball.restitution;
+					ball.position.x = xBorderRight - ball.radius; 
+				}
+				if (ball.position.x < ball.radius - xBorderLeft) {
+					ball.velocity.x *= ball.restitution;
+					ball.position.x = ball.radius; 
+				}
+				
+			}
+				
+			var loop = function () {
+				
+				// handle collisions (with walls/borders)
+				if (!mouse.isDown) updateBall();
+				detectCollisions();
+				
+				
+				ctx.clearRect(0, 0, width, height);
+				
+				// draw the wall
+				// fillRect(x, y, width, height)
+				ctx.fillStyle = "black";
+				ctx.fillRect(wall.position.x, wall.position.y, wall.thickness, wall.wallHeight);
+				ctx.fillStyle = "white";
+				ctx.fillRect(wall.position.x, wall.position.y + wall.gapPosition, wall.thickness, wall.gapWidth);
+				
+				ctx.fillStyle = "red";
+				ctx.save();
+				
+				ctx.translate(ball.position.x, ball.position.y);
+				
+				
+				ctx.beginPath();
+				ctx.arc(0, 0, ball.radius, 0, Math.PI*2, true);
+				
+				ctx.fill();
+				ctx.closePath();
+				
+				ctx.restore();
+				//ctx.save();
+				
+				// Draw the slingshot
+				if (mouse.isDown) {
+					ctx.beginPath();
+					ctx.moveTo(ball.position.x, ball.position.y);
+					ctx.lineTo(mouse.x, mouse.y);
+					ctx.stroke();
+					ctx.closePath();
+				}
+			}
+		</script>
+	</head>
+	<body onLoad="setup();">
+		<canvas id="canvas" height="400" width="600">Get a better browser!</canvas>
+	</body>
+</html>
